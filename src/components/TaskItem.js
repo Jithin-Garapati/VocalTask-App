@@ -115,7 +115,7 @@ const TaskItem = ({
     });
   };
 
-  const handleSubtaskUpdate = async (sectionIndex, subtaskIndex, completed) => {
+  const handleSubtaskUpdate = async (sectionIndex, subtaskIndex, completed, isSubtask) => {
     try {
       const updatedDescription = [...localDescription];
       updatedDescription[sectionIndex].subtasks[subtaskIndex].completed = completed;
@@ -128,7 +128,7 @@ const TaskItem = ({
 
       // Call the parent's update handler
       if (onUpdateSubtask) {
-        onUpdateSubtask(sectionIndex, subtaskIndex, completed);
+        onUpdateSubtask(sectionIndex, subtaskIndex, completed, isSubtask);
       }
 
       // Trigger refresh to update the UI
@@ -315,7 +315,7 @@ const TaskItem = ({
                               styles.subtaskItem,
                               subtask.completed && styles.completedSubtaskItem
                             ]}
-                            onPress={() => handleSubtaskUpdate(sectionIndex, subtaskIndex, !subtask.completed)}
+                            onPress={() => handleSubtaskUpdate(sectionIndex, subtaskIndex, !subtask.completed, true)}
                             activeOpacity={0.7}
                           >
                             <MaterialCommunityIcons

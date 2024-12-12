@@ -40,6 +40,8 @@ const TaskListScreen = ({ onTaskComplete }) => {
   const [showHabitsScreen, setShowHabitsScreen] = useState(false);
   const addButtonScale = useRef(new Animated.Value(1)).current;
   const taskAnimations = useRef(new Map()).current;
+  const updateQueue = useRef([]);
+  const updateTimeoutRef = useRef(null);
   const theme = useTheme();
   const [showTaskPopup, setShowTaskPopup] = useState(false);
 
@@ -62,8 +64,29 @@ const TaskListScreen = ({ onTaskComplete }) => {
 
   useEffect(() => {
     loadTasks();
-    // Remove the real-time subscription since we're handling updates optimistically
-    return () => {};
+
+    // Subscribe to task changes
+    const subscription = supabase
+      .channel('tasks-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks'
+        },
+        (payload) => {
+          // Only reload for inserts and deletes, not updates (to avoid interfering with optimistic updates)
+          if (payload.eventType === 'INSERT' || payload.eventType === 'DELETE') {
+            loadTasks();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const getTaskAnimation = (taskId) => {
@@ -106,6 +129,82 @@ const TaskListScreen = ({ onTaskComplete }) => {
     });
   };
 
+  const processUpdateQueue = async () => {
+    if (updateQueue.current.length === 0) return;
+
+    const updates = [...updateQueue.current];
+    updateQueue.current = [];
+
+    try {
+      // Group updates by task
+      const taskUpdates = updates.reduce((acc, update) => {
+        acc[update.id] = update.completed;
+        return acc;
+      }, {});
+
+      // Send updates to Supabase
+      for (const [taskId, completed] of Object.entries(taskUpdates)) {
+        await supabase
+          .from('tasks')
+          .update({ completed })
+          .eq('id', taskId);
+      }
+    } catch (error) {
+      console.error('Error updating tasks:', error);
+      // Optionally revert optimistic updates here
+    }
+  };
+
+  const queueUpdate = (taskId, completed) => {
+    updateQueue.current.push({ id: taskId, completed });
+    
+    // Clear existing timeout
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+
+    // Schedule new update
+    updateTimeoutRef.current = setTimeout(processUpdateQueue, 1000);
+  };
+
+  const handleToggleTask = async (taskId, completed, isSubtask = false) => {
+    // Optimistically update the UI
+    setTasks(prevTasks => {
+      const newTasks = prevTasks.map(task => {
+        if (isSubtask) {
+          // If it's a subtask, only update that specific subtask
+          if (task.subtasks) {
+            const updatedSubtasks = task.subtasks.map(subtask => 
+              subtask.id === taskId ? { ...subtask, completed } : subtask
+            );
+            // Check if all subtasks are completed
+            const allSubtasksCompleted = updatedSubtasks.every(st => st.completed);
+            return {
+              ...task,
+              subtasks: updatedSubtasks,
+              completed: allSubtasksCompleted
+            };
+          }
+        } else if (task.id === taskId) {
+          // If it's a main task, update it and all its subtasks
+          return {
+            ...task,
+            completed,
+            subtasks: task.subtasks?.map(subtask => ({
+              ...subtask,
+              completed
+            }))
+          };
+        }
+        return task;
+      });
+      return newTasks;
+    });
+
+    // Queue the update
+    queueUpdate(taskId, completed);
+  };
+
   const toggleTaskCompletion = async (taskId, currentStatus) => {
     try {
       const newStatus = currentStatus === 'completed' ? 'active' : 'completed';
@@ -130,19 +229,8 @@ const TaskListScreen = ({ onTaskComplete }) => {
         await animateTaskCompletion(taskId);
       }
 
-      // Update database
-      const { error } = await supabase
-        .from('tasks')
-        .update({ 
-          status: newStatus,
-          completed_at: newStatus === 'completed' ? updatedAt : null,
-          updated_at: updatedAt
-        })
-        .eq('id', taskId);
-
-      if (error) {
-        throw error;
-      }
+      // Queue the update
+      queueUpdate(taskId, newStatus === 'completed');
     } catch (error) {
       console.error('Error toggling task:', error);
       // Revert the UI state on error
@@ -410,6 +498,17 @@ const TaskListScreen = ({ onTaskComplete }) => {
     );
   }, [theme, isSelectionMode, selectedTasks]);
 
+  const handleCloseTaskPopup = useCallback(() => {
+    setShowTaskPopup(false);
+    setSelectedTask(null);
+    loadTasks();
+  }, []);
+
+  const handleSelectTask = useCallback((task) => {
+    setSelectedTask(task);
+    setShowTaskPopup(true);
+  }, []);
+
   const EmptyList = () => (
     <View style={styles.emptyListContent}>
       <MaterialCommunityIcons
@@ -527,7 +626,7 @@ const TaskListScreen = ({ onTaskComplete }) => {
             contentContainerStyle={[
               styles.listContent,
               tasks.length === 0 && styles.emptyListContent,
-              { paddingBottom: 120 } // Increased padding to prevent tasks from showing below navbar
+              { paddingBottom: 400 } // Significantly increased padding for expanded tasks
             ]}
             ListEmptyComponent={EmptyList}
           />
@@ -566,7 +665,7 @@ const TaskListScreen = ({ onTaskComplete }) => {
         task={selectedTask}
         priority={PRIORITIES.find(p => p.id === selectedTask?.priority)}
         visible={showTaskPopup}
-        onClose={() => setShowTaskPopup(false)}
+        onClose={handleCloseTaskPopup}
         onEdit={updates => handleUpdateTask(selectedTask.id, updates)}
         onToggleComplete={toggleTaskCompletion}
         onDelete={() => {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, Modal, TouchableOpacity, Platform, ScrollView } from 'react-native';
-import { TextInput, Text, Button, SegmentedButtons } from 'react-native-paper';
+import { TextInput, Text } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -67,11 +67,11 @@ const NewHabitModal = ({ visible, onDismiss, onCreateHabit }) => {
     >
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
-          <ScrollView>
+          <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.header}>
-              <Text style={styles.headerText}>New Recurring Task</Text>
+              <Text style={styles.headerText}>New Habit</Text>
               <TouchableOpacity onPress={onDismiss} style={styles.closeButton}>
-                <MaterialCommunityIcons name="close" size={24} color="#fff" />
+                <MaterialCommunityIcons name="close" size={24} color="rgba(255, 255, 255, 0.7)" />
               </TouchableOpacity>
             </View>
 
@@ -81,19 +81,25 @@ const NewHabitModal = ({ visible, onDismiss, onCreateHabit }) => {
               placeholderTextColor="rgba(255, 255, 255, 0.5)"
               value={title}
               onChangeText={setTitle}
-              mode="outlined"
+              mode="flat"
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
+              textColor="#fff"
               theme={{ colors: { primary: '#fff', text: '#fff' } }}
             />
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, styles.descriptionInput]}
               placeholder="Description (optional)"
               placeholderTextColor="rgba(255, 255, 255, 0.5)"
               value={description}
               onChangeText={setDescription}
-              mode="outlined"
+              mode="flat"
               multiline
               numberOfLines={3}
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
+              textColor="#fff"
               theme={{ colors: { primary: '#fff', text: '#fff' } }}
             />
 
@@ -103,42 +109,64 @@ const NewHabitModal = ({ visible, onDismiss, onCreateHabit }) => {
               placeholderTextColor="rgba(255, 255, 255, 0.5)"
               value={category}
               onChangeText={setCategory}
-              mode="outlined"
+              mode="flat"
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
+              textColor="#fff"
               theme={{ colors: { primary: '#fff', text: '#fff' } }}
             />
 
             <Text style={styles.label}>Priority</Text>
-            <SegmentedButtons
-              value={priority}
-              onValueChange={setPriority}
-              buttons={PRIORITIES.map(p => ({
-                value: p.value,
-                label: p.label,
-                style: { backgroundColor: p.value === priority ? p.color : 'transparent' }
-              }))}
-              style={styles.segmentedButtons}
-            />
+            <View style={styles.priorityContainer}>
+              {PRIORITIES.map(p => (
+                <TouchableOpacity
+                  key={p.value}
+                  style={[
+                    styles.priorityButton,
+                    priority === p.value && { backgroundColor: p.color }
+                  ]}
+                  onPress={() => setPriority(p.value)}
+                >
+                  <Text style={[
+                    styles.priorityText,
+                    priority === p.value && styles.priorityTextSelected
+                  ]}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             <TouchableOpacity
               style={styles.timeButton}
               onPress={() => setShowTimePicker(true)}
             >
-              <MaterialCommunityIcons name="clock-outline" size={24} color="#fff" />
+              <MaterialCommunityIcons name="clock-outline" size={24} color="rgba(255, 255, 255, 0.7)" />
               <Text style={styles.timeText}>
-                Remind me at {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </Text>
             </TouchableOpacity>
 
             <Text style={styles.label}>Recurrence</Text>
-            <SegmentedButtons
-              value={recurrencePattern}
-              onValueChange={setRecurrencePattern}
-              buttons={RECURRENCE_PATTERNS.map(p => ({
-                value: p.value,
-                label: p.label,
-              }))}
-              style={styles.segmentedButtons}
-            />
+            <View style={styles.recurrenceContainer}>
+              {RECURRENCE_PATTERNS.map(p => (
+                <TouchableOpacity
+                  key={p.value}
+                  style={[
+                    styles.recurrenceButton,
+                    recurrencePattern === p.value && styles.recurrenceButtonSelected
+                  ]}
+                  onPress={() => setRecurrencePattern(p.value)}
+                >
+                  <Text style={[
+                    styles.recurrenceText,
+                    recurrencePattern === p.value && styles.recurrenceTextSelected
+                  ]}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             {(showTimePicker || Platform.OS === 'ios') && (
               <DateTimePicker
@@ -152,14 +180,12 @@ const NewHabitModal = ({ visible, onDismiss, onCreateHabit }) => {
               />
             )}
 
-            <Button
-              mode="contained"
-              onPress={handleCreateHabit}
+            <TouchableOpacity
               style={styles.createButton}
-              labelStyle={styles.buttonText}
+              onPress={handleCreateHabit}
             >
-              Create Recurring Task
-            </Button>
+              <Text style={styles.createButtonText}>Create Habit</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </View>
@@ -174,7 +200,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#000',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -184,51 +210,110 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   headerText: {
     color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '600',
   },
   closeButton: {
     padding: 8,
   },
   input: {
-    backgroundColor: '#2a2a2a',
-    marginBottom: 20,
+    backgroundColor: '#111',
+    marginBottom: 16,
+    borderRadius: 12,
+    height: 50,
+    paddingHorizontal: 16,
+  },
+  descriptionInput: {
+    height: 100,
+    textAlignVertical: 'top',
+    paddingTop: 12,
   },
   label: {
-    color: '#fff',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 16,
-    marginBottom: 8,
+    marginBottom: 12,
     marginTop: 8,
+  },
+  priorityContainer: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    gap: 12,
+  },
+  priorityButton: {
+    flex: 1,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  priorityText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+  },
+  priorityTextSelected: {
+    color: '#fff',
+    fontWeight: '600',
   },
   timeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2a2a2a',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 20,
+    backgroundColor: '#111',
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 16,
+    gap: 12,
   },
   timeText: {
     color: '#fff',
-    marginLeft: 10,
     fontSize: 16,
   },
-  timePicker: {
-    backgroundColor: '#2a2a2a',
-    marginBottom: 20,
+  recurrenceContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
   },
-  segmentedButtons: {
-    marginBottom: 20,
+  recurrenceButton: {
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  recurrenceButtonSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  recurrenceText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+  },
+  recurrenceTextSelected: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  timePicker: {
+    height: 180,
+    marginBottom: 24,
   },
   createButton: {
     backgroundColor: '#007AFF',
-    marginTop: 20,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
   },
-  buttonText: {
+  createButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },

@@ -149,6 +149,13 @@ const HabitsScreen = ({ onSwitchToTasks }) => {
         )}
       />
 
+      <TouchableOpacity 
+        style={styles.addButton}
+        onPress={() => setShowAddModal(true)}
+      >
+        <MaterialCommunityIcons name="plus" size={32} color="#fff" />
+      </TouchableOpacity>
+
       <View style={styles.bottomNavContainer}>
         <View style={styles.bottomNav}>
           <TouchableOpacity 
@@ -157,15 +164,6 @@ const HabitsScreen = ({ onSwitchToTasks }) => {
           >
             <MaterialCommunityIcons name="home" size={24} color="#fff" />
             <Text style={styles.navText}>Tasks</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => setShowAddModal(true)}
-          >
-            <View style={styles.addButtonInner}>
-              <MaterialCommunityIcons name="plus" size={28} color="#fff" />
-            </View>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.navButton}>
@@ -311,14 +309,15 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   addButton: {
-    width: 50,
-    height: 44,
-  },
-  addButtonInner: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#007AFF',
-    borderRadius: 22,
+    position: 'absolute',
+    right: 20,
+    bottom: 120,
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 122, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
