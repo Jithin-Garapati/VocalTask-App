@@ -230,10 +230,10 @@ const TaskItem = ({
                 style={styles.checkboxContainer}
               >
                 <MaterialCommunityIcons
-                  name={item.status === 'completed' ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
+                  name={item.status === 'completed' ? 'checkbox-marked-circle-outline' : 'checkbox-blank-outline'}
                   size={22}
-                  color={item.status === 'completed' ? theme.colors.primary : theme.colors.placeholder}
-                  style={styles.checkbox}
+                  color={item.status === 'completed' ? '#10B981' : theme.colors.placeholder}
+                  style={[styles.checkbox, { borderRadius: 8 }]}
                 />
               </TouchableOpacity>
             )}
@@ -319,9 +319,10 @@ const TaskItem = ({
                             activeOpacity={0.7}
                           >
                             <MaterialCommunityIcons
-                              name={subtask.completed ? "checkbox-marked-circle" : "checkbox-blank-circle-outline"}
+                              name={subtask.completed ? "checkbox-marked-circle-outline" : "checkbox-blank-outline"}
                               size={20}
                               color={subtask.completed ? "#10B981" : "rgba(255, 255, 255, 0.5)"}
+                              style={{ borderRadius: 8 }}
                             />
                             <Text style={[
                               styles.subtaskText,

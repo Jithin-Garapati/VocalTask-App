@@ -434,12 +434,28 @@ const NewTaskModal = ({
               Cancel
             </Button>
             <Button 
-              mode="contained" 
+              mode="outlined" 
               onPress={() => {
                 Keyboard.dismiss();
                 onCreateTask();
               }} 
               disabled={!taskName.trim()}
+              style={{
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderColor: !taskName.trim() ? '#4B5563' : '#3B82F6',
+                borderRadius: 12,
+                shadowColor: !taskName.trim() ? '#4B5563' : '#3B82F6',
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 1,
+                shadowRadius: 12,
+                elevation: !taskName.trim() ? 0 : 6,
+              }}
+              labelStyle={{
+                color: !taskName.trim() ? '#4B5563' : '#3B82F6',
+                fontSize: 16,
+                fontWeight: '600',
+              }}
             >
               Create Task
             </Button>

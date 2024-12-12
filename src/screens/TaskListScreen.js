@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Animated, Platform, Text } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../utils/supabase';
@@ -10,6 +11,7 @@ import TaskDetailsModal from '../components/TaskDetailsModal';
 import Header from '../components/Header';
 import SearchBar from '../components/SearchBar';
 import TaskPopup from '../components/TaskPopup';
+import HabitsScreen from './HabitsScreen';
 
 const PRIORITIES = [
   { id: 'high', label: 'High', icon: 'flag', color: '#EF4444' },
@@ -35,6 +37,7 @@ const TaskListScreen = ({ onTaskComplete }) => {
   const [currentInput, setCurrentInput] = useState('');
   const [selectedTasks, setSelectedTasks] = useState(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [showHabitsScreen, setShowHabitsScreen] = useState(false);
   const addButtonScale = useRef(new Animated.Value(1)).current;
   const taskAnimations = useRef(new Map()).current;
   const theme = useTheme();
@@ -59,12 +62,8 @@ const TaskListScreen = ({ onTaskComplete }) => {
 
   useEffect(() => {
     loadTasks();
-    const subscription = supabase
-      .channel('tasks')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, loadTasks)
-      .subscribe();
-
-    return () => subscription.unsubscribe();
+    // Remove the real-time subscription since we're handling updates optimistically
+    return () => {};
   }, []);
 
   const getTaskAnimation = (taskId) => {
@@ -109,24 +108,56 @@ const TaskListScreen = ({ onTaskComplete }) => {
 
   const toggleTaskCompletion = async (taskId, currentStatus) => {
     try {
+      const newStatus = currentStatus === 'completed' ? 'active' : 'completed';
+      const updatedAt = new Date().toISOString();
+      
+      // Optimistically update the UI
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === taskId 
+            ? {
+                ...task,
+                status: newStatus,
+                completed_at: newStatus === 'completed' ? updatedAt : null,
+                updated_at: updatedAt
+              }
+            : task
+        )
+      );
+
       if (currentStatus !== 'completed') {
         onTaskComplete?.();
         await animateTaskCompletion(taskId);
       }
 
+      // Update database
       const { error } = await supabase
         .from('tasks')
         .update({ 
-          status: currentStatus === 'completed' ? 'active' : 'completed',
-          completed_at: currentStatus === 'completed' ? null : new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          status: newStatus,
+          completed_at: newStatus === 'completed' ? updatedAt : null,
+          updated_at: updatedAt
         })
         .eq('id', taskId);
 
-      if (error) throw error;
-      loadTasks();
+      if (error) {
+        throw error;
+      }
     } catch (error) {
       console.error('Error toggling task:', error);
+      // Revert the UI state on error
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === taskId 
+            ? {
+                ...task,
+                status: currentStatus,
+                completed_at: currentStatus === 'completed' ? updatedAt : null,
+                updated_at: updatedAt
+              }
+            : task
+        )
+      );
     }
   };
 
@@ -278,6 +309,14 @@ const TaskListScreen = ({ onTaskComplete }) => {
     }
   };
 
+  const handleSwitchToHabits = () => {
+    setShowHabitsScreen(true);
+  };
+
+  const handleSwitchToTasks = () => {
+    setShowHabitsScreen(false);
+  };
+
   const filteredTasks = tasks.filter(task => {
     if (task.completed) return false;
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -372,42 +411,51 @@ const TaskListScreen = ({ onTaskComplete }) => {
   }, [theme, isSelectionMode, selectedTasks]);
 
   const EmptyList = () => (
-    <View style={styles.emptyContainer}>
+    <View style={styles.emptyListContent}>
       <MaterialCommunityIcons
         name="check-circle-outline"
         size={80}
         color="rgba(255, 255, 255, 0.1)"
       />
-      <Text style={styles.emptyText}>All caught up!</Text>
-      <View style={styles.emptyAddContainer}>
-        <Text style={styles.emptySubtext}>Tap</Text>
-        <View style={styles.emptyPlusButton}>
+      <Text style={styles.emptyListText}>All caught up!</Text>
+      <View style={styles.emptyListAddContainer}>
+        <Text style={styles.emptyListSubtext}>Tap</Text>
+        <View style={styles.emptyListPlusButton}>
           <MaterialCommunityIcons name="plus" size={18} color="#fff" />
         </View>
-        <Text style={styles.emptySubtext}>to add a task</Text>
+        <Text style={styles.emptyListSubtext}>to add a task</Text>
       </View>
     </View>
   );
 
   const BottomNav = useCallback(() => (
     <View style={styles.bottomNavContainer}>
+      <View style={styles.navbarBackground} />
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navButton}>
-          <MaterialCommunityIcons name="chart-timeline-variant" size={24} color="#fff" />
-          <Text style={styles.navText}>Habits</Text>
+        <TouchableOpacity 
+          style={[styles.navButton, showHabitsScreen && styles.activeNavButton]}
+          onPress={handleSwitchToHabits}
+        >
+          <MaterialCommunityIcons 
+            name="chart-timeline-variant" 
+            size={24} 
+            color={showHabitsScreen ? "#007AFF" : "#fff"} 
+          />
+          <Text style={[styles.navText, showHabitsScreen && styles.activeNavText]}>Habits</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
+          onPress={showHabitsScreen ? handleSwitchToTasks : () => setShowAddModal(true)}
           activeOpacity={0.8}
         >
-          <Animated.View style={[
-            styles.addButtonInner,
-            { transform: [{ scale: addButtonScale }] }
-          ]}>
-            <MaterialCommunityIcons name="plus" size={28} color="#fff" />
-          </Animated.View>
+          <View style={styles.addButtonInner}>
+            <MaterialCommunityIcons 
+              name={showHabitsScreen ? "home" : "plus"} 
+              size={24} 
+              color="#fff" 
+            />
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navButton}>
@@ -416,7 +464,7 @@ const TaskListScreen = ({ onTaskComplete }) => {
         </TouchableOpacity>
       </View>
     </View>
-  ), []);
+  ), [showHabitsScreen]);
 
   return (
     <View style={styles.container}>
@@ -426,57 +474,73 @@ const TaskListScreen = ({ onTaskComplete }) => {
         showProfileMenu={showProfileMenu}
         setShowProfileMenu={setShowProfileMenu}
         setSortBy={setSortBy}
+        screenType={showHabitsScreen ? 'habits' : 'tasks'}
       />
 
-      <SearchBar
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        theme={theme}
-      />
+      {showHabitsScreen ? (
+        <HabitsScreen onSwitchToTasks={handleSwitchToTasks} />
+      ) : (
+        <>
+          <SearchBar
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            theme={theme}
+          />
 
-      {isSelectionMode && (
-        <View style={styles.selectionBar}>
-          <Text style={styles.selectionText}>
-            {selectedTasks.size} selected
-          </Text>
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={handleDeleteSelected}
-          >
-            <MaterialCommunityIcons name="delete" size={24} color="#EF4444" />
-            <Text style={styles.deleteButtonText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
+          {isSelectionMode && (
+            <View style={styles.selectionBar}>
+              <Text style={styles.selectionText}>
+                {selectedTasks.size} selected
+              </Text>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={handleDeleteSelected}
+              >
+                <MaterialCommunityIcons name="delete" size={24} color="#EF4444" />
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {tasks.length > 0 && (
+            <View style={styles.statsContainer}>
+              <Text style={styles.statsText}>
+                {tasks.filter(t => !t.completed).length} remaining
+              </Text>
+              <Text style={styles.statsText}>•</Text>
+              <Text style={styles.statsText}>
+                {tasks.filter(t => t.completed).length} completed
+              </Text>
+            </View>
+          )}
+
+          <DraggableFlatList
+            data={filteredTasks}
+            renderItem={renderTask}
+            keyExtractor={item => item.id.toString()}
+            onDragEnd={({ from, to }) => {
+              const updated = [...tasks];
+              const [item] = updated.splice(from, 1);
+              updated.splice(to, 0, item);
+              setTasks(updated);
+            }}
+            contentContainerStyle={[
+              styles.listContent,
+              tasks.length === 0 && styles.emptyListContent,
+              { paddingBottom: 120 } // Increased padding to prevent tasks from showing below navbar
+            ]}
+            ListEmptyComponent={EmptyList}
+          />
+
+          <LinearGradient
+            colors={['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0.9)', '#000']}
+            style={styles.fadeGradient}
+            pointerEvents="none"
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          />
+        </>
       )}
-
-      {tasks.length > 0 && (
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>
-            {tasks.filter(t => !t.completed).length} remaining
-          </Text>
-          <Text style={styles.statsText}>•</Text>
-          <Text style={styles.statsText}>
-            {tasks.filter(t => t.completed).length} completed
-          </Text>
-        </View>
-      )}
-
-      <DraggableFlatList
-        data={filteredTasks}
-        renderItem={renderTask}
-        keyExtractor={item => item.id.toString()}
-        onDragEnd={({ from, to }) => {
-          const updated = [...tasks];
-          const [item] = updated.splice(from, 1);
-          updated.splice(to, 0, item);
-          setTasks(updated);
-        }}
-        contentContainerStyle={[
-          styles.listContent,
-          tasks.length === 0 && styles.emptyListContent
-        ]}
-        ListEmptyComponent={EmptyList}
-      />
 
       <BottomNav />
 
@@ -574,14 +638,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: 'transparent',
   },
+  navbarBackground: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    backgroundColor: '#000',
+    zIndex: 0,  
+  },
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#000',
-    borderRadius: 32,
-    height: 64,
-    paddingHorizontal: 24,
+    backgroundColor: 'transparent',
+    zIndex: 2,  
+    paddingHorizontal: 30,
+    paddingVertical: 20,
   },
   navButton: {
     alignItems: 'center',
@@ -597,73 +670,34 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   addButton: {
-    width: 50,
-    height: 44,
-    alignItems: 'center',
+    width: 70,
+    height: 48,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   addButtonInner: {
+    width: 70,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    borderRadius: 12,
+    borderStyle: 'dotted',
+  },
+  addButtonContent: {
     width: '100%',
     height: '100%',
-    borderRadius: 24,
-    backgroundColor: '#000',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  emptyContainer: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 100,
-  },
-  emptyText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#fff',
-    marginTop: 24,
-    marginBottom: 12,
-    letterSpacing: 0.5,
-  },
-  emptyAddContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptySubtext: {
-    fontSize: 16,
-    color: '#fff',
-    opacity: 0.6,
-  },
-  emptyPlusButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#1A1A1A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   selectionBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    backgroundColor: '#1A1A1A',
-    marginHorizontal: 20,
-    borderRadius: 12,
-    marginBottom: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
   selectionText: {
     color: '#fff',
@@ -680,6 +714,21 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 16,
     fontWeight: '600',
+  },
+  activeNavButton: {
+    opacity: 1,
+  },
+  activeNavText: {
+    color: '#007AFF',
+    opacity: 1,
+  },
+  fadeGradient: {
+    position: 'absolute',
+    bottom: 80,
+    left: 0,
+    right: 0,
+    height: 60,
+    zIndex: 1,
   },
 });
 
